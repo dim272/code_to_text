@@ -1,20 +1,18 @@
 from pathlib import Path
 
+
 def check_path(path: Path | str) -> Path:
-    """Проверяет, что путь существует и возвращает объект Path."""
+    """Checks that the path exists and returns a Path object."""
     if not isinstance(path, (Path, str)):
         raise TypeError("Path must be a string or Path object")
-
     path = Path(path)
-
     if not path.exists():
         raise NotADirectoryError(f"Path {path} does not exist")
-
     return path
 
 
 def read_gitignore(path: Path) -> list[str]:
-    """Читает .gitignore и возвращает список шаблонов для игнорирования."""
+    """Reads .gitignore and returns a list of ignore patterns."""
     gitignore = path / '.gitignore'
     patterns = []
     if gitignore.exists():
@@ -22,81 +20,72 @@ def read_gitignore(path: Path) -> list[str]:
         for line in content.splitlines():
             line = line.strip()
             if line and not line.startswith('#'):
-                # Убираем завершающие слэши, если это директории
+                # Remove trailing slashes if present (for directories)
                 patterns.append(line.rstrip('/'))
     return patterns
 
 
 def is_ignored(relative_path: Path, ignore_patterns: list[str]) -> bool:
     """
-    Проверяет, должен ли файл быть проигнорирован по списку паттернов .gitignore.
-    Поддерживает:
-      - data/          → игнорировать всю папку data и её содержимое
-      - *.log          → все .log файлы
-      - /config.txt    → только в корне
-      - **/temp/       → все папки temp в любом месте
+    Checks if a file should be ignored based on .gitignore-like patterns.
+    Supports:
+      - data/          → ignore entire 'data' folder and its contents
+      - *.log          → all .log files
+      - /config.txt    → only in root
+      - **/temp/       → any 'temp' folder anywhere in the structure
     """
-    str_path = relative_path.as_posix()  # используем / всегда
-
+    str_path = relative_path.as_posix()  # Always use forward slashes
     for pattern in (p.strip() for p in ignore_patterns if p.strip()):
-        # Убираем завершающий слэш для обработки
-        clean_pattern = pattern.rstrip('/')
-
-        # Полный путь с / в начале — только в корне
+        clean_pattern = pattern.rstrip('/')  # Remove trailing slash
+        # Starts with / → match only in root
         if pattern.startswith('/'):
             if str_path == clean_pattern[1:] or str_path.startswith(clean_pattern[1:] + '/'):
                 return True
-
-        # Заканчивается на / — это директория, игнорируем всё её содержимое
+        # Ends with / → directory and all its contents
         elif pattern.endswith('/'):
             if str_path == clean_pattern or str_path.startswith(clean_pattern):
                 return True
-
-        # Содержит ** — рекурсивный матч
+        # Contains ** → recursive match
         elif '**' in pattern:
             import fnmatch
-            # Заменяем ** на * для простой проверки (упрощённо)
-            # Лучше использовать pathspec, но пока упростим
+            # Replace ** with * for simplified matching (basic approximation)
+            # For full compliance, use 'pathspec', but this is simpler
             if fnmatch.fnmatch(str_path, pattern.replace('**', '*')):
                 return True
-
-        # Простой паттерн: *.ext, имя файла
+        # Wildcard patterns: *.ext, *name, etc.
         elif pattern.startswith('*') or pattern.endswith('*'):
             import fnmatch
             if fnmatch.fnmatch(str_path, pattern):
                 return True
             if fnmatch.fnmatch(relative_path.name, pattern):
                 return True
-
-        # Просто имя файла/папки
+        # Plain filename or folder name
         else:
             if relative_path.name == pattern:
                 return True
-            if str_path.startswith(f"{pattern}/"):  # подпапки
+            if str_path.startswith(f"{pattern}/"):  # Subdirectories
                 return True
-
     return False
 
 
 def is_text_file(file_path: Path) -> bool:
     """
-    Эвристика: определяет, является ли файл текстовым.
-    Пробует прочитать первые N байт и проверяет на бинарные данные.
+    Heuristic: determines if a file is a text file.
+    Tries to read the first N bytes and checks for binary data.
     """
     try:
         with file_path.open('rb') as f:
             chunk = f.read(1024)
             if not chunk:
-                return True  # пустой файл — считаем текстовым
-            # Если есть много нулевых байтов — вероятно, бинарный
+                return True  # Empty file → treat as text
+            # If there are many null bytes, likely binary
             if b'\x00' in chunk:
                 return False
-            # Попробуем декодировать
+            # Try to decode as UTF-8
             try:
                 chunk.decode('utf-8', errors='replace')
                 return True
             except UnicodeDecodeError:
                 return False
-            return True
     except Exception:
         return False

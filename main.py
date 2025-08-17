@@ -10,24 +10,23 @@ def extract_text_files(
         encoding: str = 'utf-8'
 ):
     """
-    Сканирует репозиторий, извлекает текст из файлов и сохраняет их как .txt
-    с именем <относительный_путь>.txt в указанной директории.
+    Scans a repository, extracts text from files, and saves them as .txt files
+    named <relative_path>.txt in the specified directory.
+    If output_dir is not provided, defaults to:
+        ./result/<repo_folder_name>/
 
-    Если output_dir не указан, используется:
-        ./result/<имя_папки_repo_path>/
-
-    :param repo_path: Путь к корню проекта
-    :param output_dir: Куда сохранять .txt файлы (опционально)
-    :param user_ignore: Дополнительные файлы/паттерны для игнорирования
-    :param encoding: Кодировка для чтения файлов
+    :param repo_path: Path to the project root
+    :param output_dir: Directory to save .txt files (optional)
+    :param user_ignore: Additional files/patterns to ignore
+    :param encoding: File encoding for reading (default: utf-8)
     """
     repo_path = check_path(repo_path)
-    repo_path = repo_path.resolve()  # Полный путь, без относительностей
+    repo_path = repo_path.resolve()  # Convert to absolute path
 
-    # Определяем имя папки репозитория
+    # Use folder name as repo name
     repo_name = repo_path.name or 'unknown_repo'
 
-    # Автоматический output_dir: ./result/<repo_name>/
+    # Default output directory: ./result/<repo_name>/
     if output_dir is None:
         output_dir = Path.cwd() / 'result' / repo_name
     else:
@@ -35,39 +34,41 @@ def extract_text_files(
 
     user_ignore = user_ignore or []
 
-    # Создаём выходную директорию
+    # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Собираем паттерны игнорирования
+    # Combine .gitignore patterns and user-defined ones
     gitignore_patterns = read_gitignore(repo_path)
     all_ignore_patterns = gitignore_patterns + user_ignore
 
-    # Проходим по всем файлам рекурсивно
+    # Recursively scan all files
     for file_path in repo_path.rglob('*'):
         if file_path.is_dir():
             continue
 
-        # Получаем относительный путь
+        # Get relative path
         try:
             relative_path = file_path.relative_to(repo_path)
         except ValueError:
-            continue  # на всякий случай
+            continue  # Skip if not relative (should not happen)
 
-        # Проверяем, находится ли файл в скрытой директории
-        if any(part.startswith('.') for part in file_path.relative_to(repo_path).parts) or \
-                is_ignored(relative_path, all_ignore_patterns):
+        # Skip hidden directories or files
+        if any(part.startswith('.') for part in relative_path.parts):
             continue
 
-        # Проверяем, текстовый ли файл
+        # Skip if matches ignore patterns
+        if is_ignored(relative_path, all_ignore_patterns):
+            continue
+
+        # Skip binary files
         if not is_text_file(file_path):
             continue
 
-        # Формируем имя выходного файла: some/path/file.py.txt
-        # Заменяем / и \ на ., сохраняем структуру в имени файла
+        # Generate safe filename: replace / and \ with ., keep structure
         safe_filename = str(relative_path).replace('/', '.').replace('\\', '.') + '.txt'
         output_file = output_dir / safe_filename
 
-        # Создаём родительскую директорию для выходного файла
+        # Create parent directories if needed
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -84,6 +85,6 @@ def extract_text_files(
 
 if __name__ == '__main__':
     extract_text_files(
-        repo_path='',                   # /home/user/project
-        user_ignore=['README.md',]      # ignored files
+        repo_path='',                   # e.g., /home/user/project
+        user_ignore=['README.md']       # additional files to ignore
     )
