@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from misc import check_path, read_gitignore, is_ignored, is_text_file
@@ -32,12 +33,13 @@ def extract_text_files(
     else:
         output_dir = Path(output_dir)
 
-    user_ignore = user_ignore or []
-
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True)
 
     # Combine .gitignore patterns and user-defined ones
+    user_ignore = user_ignore or []
     gitignore_patterns = read_gitignore(repo_path)
     all_ignore_patterns = gitignore_patterns + user_ignore
 
